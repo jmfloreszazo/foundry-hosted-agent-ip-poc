@@ -1,0 +1,15 @@
+# Pinned deps for AgentPython. Mirrors the Microsoft-shipped bring-your-own
+# Python Responses hosted-agent sample:
+#   https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/responses/hello-world
+#
+# azure-ai-agentserver-responses is the official Python counterpart of the
+# .NET Azure.AI.AgentServer.Responses SDK used by src/Agent/Program.cs.
+# It provisions POST /responses, /readiness, SSE lifecycle and OpenTelemetry
+# so we do NOT hand-roll the wire protocol.
+azure-ai-agentserver-responses==1.0.0b8
+azure-identity==1.25.3
+azure-keyvault-secrets==4.9.0
+# openai: official client used to call the gpt-5-mini deployment behind the
+# Foundry account (Phase B). Version pin chosen for native ``reasoning_effort``
+# support on the AsyncAzureOpenAI class.
+openai>=1.60,<2

@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: foundry-hosted-agent-ip-poc
+metadata:
+    template: foundry-hosted-agent-ip-poc@1.0.0
+services:
+    ippoc-agentcsharp:
+        project: src/ippoc-agentcsharp
+        host: azure.ai.agent
+        language: docker
+        image: ippocacroqxs25zqctwd2.azurecr.io/agentcsharp:v7
+        docker:
+            remoteBuild: true
+        uses:
+            - ippoc-proj
+        container:
+            resources:
+                cpu: "0.5"
+                memory: 1Gi
+        description: Hosted container agent (C# on .NET 10) — image ippocacroqxs25zqctwd2.azurecr.io/agentcsharp:v7
+        environmentVariables:
+            - name: KEY_VAULT_URI
+              value: ${KEY_VAULT_URI}
+            - name: SYSTEM_PROMPT_SECRET
+              value: ${SYSTEM_PROMPT_SECRET}
+            - name: SYSTEM_PROMPT_INLINE
+              value: ${SYSTEM_PROMPT_INLINE}
+            - name: AZURE_OPENAI_ENDPOINT
+              value: ${AZURE_OPENAI_ENDPOINT}
+            - name: AZURE_OPENAI_API_KEY
+              value: ${AZURE_OPENAI_API_KEY}
+            - name: MODEL_DEPLOYMENT_NAME
+              value: ${FOUNDRY_MODEL_NAME}
+            - name: BENCHMARK_MODE
+              value: ${BENCHMARK_MODE}
+        kind: hosted
+        name: ippoc-agentcsharp
+        protocols:
+            - protocol: responses
+              version: 2.0.0
+    ippoc-agentpython:
+        project: src/ippoc-agentpython
+        host: azure.ai.agent
+        language: docker
+        image: ippocacroqxs25zqctwd2.azurecr.io/agentpython:v12
+        docker:
+            remoteBuild: true
+        uses:
+            - ippoc-proj
+        container:
+            resources:
+                cpu: "0.5"
+                memory: 1Gi
+        description: Hosted container agent (Python 3.12 + azure-ai-agentserver-responses 1.0.0b8) — image ippocacroqxs25zqctwd2.azurecr.io/agentpython:v12
+        environmentVariables:
+            - name: KEY_VAULT_URI
+              value: ${KEY_VAULT_URI}
+            - name: SYSTEM_PROMPT_SECRET
+              value: ${SYSTEM_PROMPT_SECRET}
+            - name: SYSTEM_PROMPT_INLINE
+              value: ${SYSTEM_PROMPT_INLINE}
+            - name: AZURE_OPENAI_ENDPOINT
+              value: ${AZURE_OPENAI_ENDPOINT}
+            - name: AZURE_OPENAI_API_KEY
+              value: ${AZURE_OPENAI_API_KEY}
+            - name: MODEL_DEPLOYMENT_NAME
+              value: ${FOUNDRY_MODEL_NAME}
+            - name: BENCHMARK_MODE
+              value: ${BENCHMARK_MODE}
+        kind: hosted
+        name: ippoc-agentpython
+        protocols:
+            - protocol: responses
+              version: 2.0.0
+    ippoc-proj:
+        host: azure.ai.project
+        endpoint: https://ippocfoundryoqxs25zqctwd2.services.ai.azure.com/api/projects/ippoc-proj
+infra:
+    provider: bicep
+    path: infra
+    module: main

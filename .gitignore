@@ -1,0 +1,5 @@
+.env
+.azure/
+bin/
+obj/
+*.user

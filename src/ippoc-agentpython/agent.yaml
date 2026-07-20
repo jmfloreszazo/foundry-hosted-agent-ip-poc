@@ -1,0 +1,8 @@
+name: ippoc-agentpython
+template:
+    description: Hosted container agent (Python 3.12 + azure-ai-agentserver-responses 1.0.0b8) using pre-built image ippocacroqxs25zqctwd2.azurecr.io/agentpython:v12
+    kind: hosted
+    name: ippoc-agentpython
+    protocols:
+        - protocol: responses
+          version: 2.0.0

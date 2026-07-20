@@ -1,0 +1,8 @@
+name: ippoc-agentcsharp
+template:
+    description: Hosted container agent (C#) using pre-built image ippocacroqxs25zqctwd2.azurecr.io/agent:v3
+    kind: hosted
+    name: ippoc-agentcsharp
+    protocols:
+        - protocol: responses
+          version: 2.0.0

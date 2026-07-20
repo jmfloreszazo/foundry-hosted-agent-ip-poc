@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Do not emit PDBs with absolute paths or embedded sources in the image:
+         part of not leaking IP detail in the published binary. -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <UserSecretsId>c3bd1562-d3cb-4e97-80a1-a2326a1f741b</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Azure AI Agent Server: Responses protocol adapter + shared host (Kestrel,
+         OpenTelemetry, /readiness health, x-platform-server header). The host
+         hooks Application Insights automatically via OTLP when APPLICATIONINSIGHTS_CONNECTION_STRING
+         is present, so we don't need Microsoft.ApplicationInsights.AspNetCore. -->
+    <PackageReference Include="Azure.AI.AgentServer.Responses" Version="1.0.0-beta.3" />
+    <PackageReference Include="Azure.AI.AgentServer.Core" Version="1.0.0-beta.22" />
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.7.0" />
+    <!-- Azure.AI.OpenAI: client used to call the gpt-5-mini deployment behind
+         the Foundry account (Phase B). 2.2.0-beta.4 is the earliest version
+         that exposes ReasoningEffortLevel on ChatCompletionOptions, needed to
+         keep gpt-5 reasoning cost bounded and comparable to the Python side. -->
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.2.0-beta.4" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,71 @@
+name: build-sign-deploy
+
+# CI/CD pipeline that materializes the IP protection story:
+#   deterministic build -> sign -> push to private ACR -> verify -> deploy to Foundry
+# The image (your IP) never touches a public registry and is only deployed if its
+# signature is valid.
+
+on:
+  # Automatic deployment is disabled on purpose.
+  # Uncomment this block when you want pushes to main to deploy again.
+  # push:
+  #   branches: [ main ]
+  #   paths: [ 'src/**', 'infra/**', 'azure.yaml' ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write        # OIDC to Azure and to Sigstore (cosign keyless)
+  contents: read
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    env:
+      # azd needs these to run non-interactively.
+      AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure (OIDC, no long-lived secrets)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup azd
+        uses: Azure/setup-azd@v2
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # The SP running the pipeline needs AcrPush + Foundry project access. The
+      # Bicep grants those roles to the object id passed as `deployerPrincipalId`.
+      # We resolve the SP's object id here and expose it to azd so Bicep picks it up.
+      - name: Resolve deployer object id
+        run: |
+          OBJECT_ID=$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)
+          echo "DEPLOYERPRINCIPALID=$OBJECT_ID" >> "$GITHUB_ENV"
+
+      # Initialize the azd environment on the runner (idempotent).
+      - name: Initialize azd environment
+        run: |
+          azd env new "$AZURE_ENV_NAME" --location "$AZURE_LOCATION" --subscription "$AZURE_SUBSCRIPTION_ID" --no-prompt || \
+            azd env select "$AZURE_ENV_NAME"
+          azd env set deployerPrincipalId "$DEPLOYERPRINCIPALID"
+
+      # azd package builds the linux/amd64 image and runs the postpackage hook
+      # (sign-image.sh). azd deploy runs predeploy (verify-image.sh) and publishes
+      # the agent version against the Foundry project.
+      - name: Provision + package + deploy
+        env:
+          SIGNING_MODE: cosign
+          EXPECTED_IDENTITY_REGEX: 'https://github.com/${{ github.repository }}/.*'
+          EXPECTED_ISSUER_REGEX: 'https://token.actions.githubusercontent.com'
+        run: |
+          azd provision --no-prompt
+          azd package --no-prompt
+          azd deploy --no-prompt
+
