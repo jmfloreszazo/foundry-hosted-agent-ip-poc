@@ -49,6 +49,10 @@
     physical retries is tracked in a separate ``retries`` column and reported
     in the summary. Default 5.
 
+.PARAMETER RequestTimeoutSec
+    Per-request HTTP timeout in seconds. This prevents one stalled hosted-agent
+    call from hanging an entire long benchmark run. Default 120.
+
 .PARAMETER ProjectBase
     Base URL of the Foundry project (defaults to the PoC deployment).
 
@@ -74,6 +78,7 @@ param(
     [int]$Warmup = 3,
     [double]$TargetRps = 0,
     [int]$MaxRetries = 5,
+    [int]$RequestTimeoutSec = 120,
     [string]$ProjectBase = "https://ippocfoundryoqxs25zqctwd2.services.ai.azure.com/api/projects/ippoc-proj",
     [string]$OutDir = "out/bench"
 )
@@ -135,7 +140,8 @@ function Invoke-AgentOnce {
     param(
         [string]$Endpoint,
         [string]$Body,
-        [int]$MaxRetries = 5
+        [int]$MaxRetries = 5,
+        [int]$RequestTimeoutSec = 120
     )
     $result = [ordered]@{
         t_utc          = (Get-Date).ToUniversalTime().ToString('o')
@@ -158,6 +164,7 @@ function Invoke-AgentOnce {
             $raw = Invoke-WebRequest -Uri $Endpoint -Method POST -Body $Body `
                 -ContentType 'application/json' `
                 -Headers @{ Authorization = "Bearer $token" } `
+                -OperationTimeoutSeconds $RequestTimeoutSec `
                 -SkipHttpErrorCheck -ErrorAction Stop
             $code = [int]$raw.StatusCode
             $result.status_code = $code
@@ -229,11 +236,12 @@ function Invoke-Agent {
         [int]$Warmup,
         [int]$Parallel,
         [double]$TargetRps = 0,
-        [int]$MaxRetries = 5
+        [int]$MaxRetries = 5,
+        [int]$RequestTimeoutSec = 120
     )
     Write-Host "-> $Name : warming up ($Warmup) ..." -ForegroundColor DarkGray
     for ($i = 0; $i -lt $Warmup; $i++) {
-        [void](Invoke-AgentOnce -Endpoint $Endpoint -Body $Body -MaxRetries $MaxRetries)
+        [void](Invoke-AgentOnce -Endpoint $Endpoint -Body $Body -MaxRetries $MaxRetries -RequestTimeoutSec $RequestTimeoutSec)
     }
 
     $paceMs = if ($TargetRps -gt 0) { [int](1000.0 / $TargetRps) } else { 0 }
@@ -249,7 +257,12 @@ function Invoke-Agent {
             $slotStart = [double]($i * $paceMs)
             $waitMs = $slotStart - $nextSlot.Elapsed.TotalMilliseconds
             if ($waitMs -gt 0) { Start-Sleep -Milliseconds ([int]$waitMs) }
-            $rows += Invoke-AgentOnce -Endpoint $Endpoint -Body $Body -MaxRetries $MaxRetries
+            $row = Invoke-AgentOnce -Endpoint $Endpoint -Body $Body -MaxRetries $MaxRetries -RequestTimeoutSec $RequestTimeoutSec
+            $rows += $row
+            if (($i + 1) -eq 1 -or ($i + 1) % 10 -eq 0 -or ($i + 1) -eq $Count) {
+                $state = if ($row.success) { "ok" } elseif ($row.error) { $row.error } else { "failed" }
+                Write-Host ("   {0}: {1}/{2} last={3} {4:n0}ms" -f $Name, ($i + 1), $Count, $state, $row.duration_ms) -ForegroundColor DarkGray
+            }
         }
     } else {
         # ForEach-Object -Parallel: each runspace re-imports scope, so pass

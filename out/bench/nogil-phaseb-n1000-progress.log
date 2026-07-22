@@ -1,0 +1,31 @@
+-> python : warming up (0) ...
+-> python : running 1000 iterations (parallel=1, target_rps=0.15, retries<=5) ...
+   python: 1/1000 last=ok 5.042ms
+   python: 10/1000 last=ok 4.526ms
+   python: 20/1000 last=ok 4.779ms
+   python: 30/1000 last=ok 4.449ms
+   python: 40/1000 last=ok 4.770ms
+   python: 50/1000 last=ok 4.497ms
+   python: 60/1000 last=ok 4.289ms
+   python: 70/1000 last=ok 4.804ms
+   python: 80/1000 last=ok 4.616ms
+   python: 90/1000 last=ok 4.467ms
+   python: 100/1000 last=ok 4.688ms
+   python: 110/1000 last=ok 4.625ms
+   python: 120/1000 last=ok 4.816ms
+   python: 130/1000 last=ok 4.768ms
+   python: 140/1000 last=ok 4.591ms
+   python: 150/1000 last=ok 4.818ms
+   python: 160/1000 last=ok 4.473ms
+   python: 170/1000 last=ok 4.368ms
+   python: 180/1000 last=ok 4.674ms
+   python: 190/1000 last=ok 4.548ms
+   python: 200/1000 last=ok 4.601ms
+   python: 210/1000 last=ok 4.352ms
+   python: 220/1000 last=ok 4.885ms
+   python: 230/1000 last=ok 4.812ms
+   python: 240/1000 last=ok 4.528ms
+   python: 250/1000 last=ok 4.703ms
+   python: 260/1000 last=ok 4.360ms
+   python: 270/1000 last=ok 4.660ms
+   python: 280/1000 last=ok 4.505ms

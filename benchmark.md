@@ -266,3 +266,49 @@ Run: [out/bench/run-20260718-151536/summary.md](out/bench/run-20260718-151536/su
 - Phase A and Phase B use the same deployed image family; only `BENCHMARK_MODE` changes.
 - The long runs no longer show the previous AAD-token-expiry failure mode (`http_403` after token expiry). Remaining failures are isolated `http_500` responses from the hosted-agent path.
 - Token usage is `n/a` in these summaries because the current Responses wire envelope does not expose model `usage` back to the harness.
+
+## Anexo: Python free-threaded/no-GIL container
+
+This appendix is an experimental control run, not the production baseline. The
+Python agent was temporarily redeployed with a custom CPython free-threaded
+build from [src/AgentPython/Dockerfile.nogil](src/AgentPython/Dockerfile.nogil):
+
+| item | value |
+|---|---|
+| ACR image | `ippocacroqxs25zqctwd2.azurecr.io/agentpython:nogil-3.14.0-20260722` |
+| digest | `sha256:f9a501c3687cec6d4506db6bec2904003430e26a1dcd3ba35287f87ce8548326` |
+| Python build | CPython 3.14.0 configured with `--disable-gil` |
+| Base image | `debian:bookworm-slim` |
+| Deployment scope | temporary `ippoc-agentpython` redeploy only |
+
+CPython 3.13 free-threaded was also attempted first, but the dependency graph
+failed during image build because CFFI does not support the free-threaded build
+of CPython 3.13. The experiment therefore uses CPython 3.14 free-threaded,
+where the dependency set installed successfully with `cp314t` wheels.
+
+The benchmark harness was extended with `-RequestTimeoutSec` and sequential
+progress logging so long hosted-agent runs cannot sit silently forever on a
+stalled HTTP call. The production endpoint was restored afterwards to
+`agentpython:v12` with `BENCHMARK_MODE=phase-b`.
+
+### Phase B: no-GIL with `gpt-5-mini`
+
+| n | run | success | wallclock_s | throughput_rps | mean_ms | p50_ms | p95_ms | p99_ms | max_ms | top_errors |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 10 | [out/bench/run-20260722-181047/summary.md](out/bench/run-20260722-181047/summary.md) | 10/10 | 64.373 | 0.155 | 4757.49 | 4643.59 | 5434.28 | 5658.17 | 5714.14 | n/a |
+| 100 | [out/bench/run-20260722-182810/summary.md](out/bench/run-20260722-182810/summary.md) | 100/100 | 664.564 | 0.150 | 4763.57 | 4737.32 | 5388.40 | 5826.95 | 5854.35 | n/a |
+| 1000 | `out/bench/nogil-phaseb-n1000-progress.log` | partial 280/1000 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | stopped before summary; all logged checkpoints through 280/1000 were `ok` |
+
+### Phase A: no-GIL without model call
+
+| n | run | success | wallclock_s | throughput_rps | mean_ms | p50_ms | p95_ms | p99_ms | max_ms | top_errors |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 10 | [out/bench/run-20260722-200153/summary.md](out/bench/run-20260722-200153/summary.md) | 10/10 | 64.773 | 0.154 | 4731.54 | 4635.14 | 5356.38 | 5499.76 | 5535.60 | n/a |
+| 100 | `out/bench/nogil-phasea-n100-progress.log` | partial 30/100 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | stopped before summary; logged checkpoints through 30/100 were `ok` |
+| 1000 | not run to completion | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | skipped; at 0.15 rps this is roughly a 1h50m single-agent run per mode |
+
+The closed no-GIL runs do not materially change the latency story for this
+hosted-agent workload: the observed means remain around 4.7s in both Phase A
+and Phase B. That is consistent with the benchmark being dominated by hosted
+agent/proxy/network latency and the deliberate opacity delay, not by Python CPU
+parallelism where removing the GIL would be expected to help.

@@ -1,0 +1,6 @@
+-> python : warming up (0) ...
+-> python : running 100 iterations (parallel=1, target_rps=0.15, retries<=5) ...
+   python: 1/100 last=ok 4.283ms
+   python: 10/100 last=ok 4.378ms
+   python: 20/100 last=ok 4.944ms
+   python: 30/100 last=ok 4.719ms

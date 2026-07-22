@@ -1,0 +1,38 @@
+# Benchmark run 2026-07-22 20:03:01 +02:00
+
+| setting | value |
+|---|---|
+| warmup | 0 |
+| parallel | 1 |
+| target_rps | 0.15 |
+| max_retries | 5 |
+| host | AVAPC-075332338 |
+| project | https://ippocfoundryoqxs25zqctwd2.services.ai.azure.com/api/projects/ippoc-proj |
+| powershell | 7.6.4 |
+| n | 10 |
+| prompt | benchmark ping: what is the capital of France? |
+
+| metric | python |
+|---|---|
+| n_total | 10 |
+| n_success | 10 |
+| n_failed | n/a |
+| success_rate_pct | 100 |
+| wallclock_s | 64.773 |
+| throughput_rps | 0.154 |
+| n_calls_retried | n/a |
+| retries_total | n/a |
+| latency_ms_mean | 4731.54 |
+| latency_ms_stddev | 394.68 |
+| latency_ms_min | 4214.12 |
+| latency_ms_p50 | 4635.14 |
+| latency_ms_p90 | 5177.15 |
+| latency_ms_p95 | 5356.38 |
+| latency_ms_p99 | 5499.76 |
+| latency_ms_max | 5535.6 |
+| response_bytes_mean | 890 |
+| tokens_in_avg | n/a |
+| tokens_out_avg | n/a |
+| tokens_total_sum | n/a |
+| top_errors | n/a |
+

@@ -1,0 +1,84 @@
+# Experimental no-GIL/free-threaded Python image for benchmark appendix only.
+# It intentionally does not replace Dockerfile, which remains the production
+# representative Python 3.12 baseline.
+
+FROM debian:bookworm-slim AS build
+
+ARG PYTHON_VERSION=3.14.0
+ARG PREFIX=/opt/python-nogil
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /src
+
+ENV PATH="/opt/python-nogil/bin:${PATH}" \
+    LD_LIBRARY_PATH="/opt/python-nogil/lib"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        libbz2-dev \
+        libffi-dev \
+        libgdbm-dev \
+        liblzma-dev \
+        libncursesw5-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libssl-dev \
+        tk-dev \
+        uuid-dev \
+        xz-utils \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz" -o python.tgz \
+    && tar -xzf python.tgz \
+    && cd "Python-${PYTHON_VERSION}" \
+    && ./configure --prefix="${PREFIX}" --disable-gil --enable-shared --with-ensurepip=install \
+    && make -j"$(nproc)" \
+    && make install \
+    && "${PREFIX}/bin/python3" -m pip install --upgrade pip setuptools wheel
+
+COPY requirements.txt .
+RUN python3 -m pip install --prefix=/install -r requirements.txt
+
+FROM debian:bookworm-slim AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PATH="/opt/python-nogil/bin:${PATH}" \
+    LD_LIBRARY_PATH="/opt/python-nogil/lib" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libbz2-1.0 \
+        libexpat1 \
+        libffi8 \
+        liblzma5 \
+        libncursesw6 \
+        libreadline8 \
+        libsqlite3-0 \
+        libssl3 \
+        uuid-runtime \
+        zlib1g \
+    && useradd --create-home --shell /usr/sbin/nologin appuser \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /opt/python-nogil /opt/python-nogil
+COPY --from=build /install /opt/python-nogil
+
+COPY --chown=appuser:appuser guardrails.py opacity.py key_vault_prompt_store.py \
+     protected_response_handler.py main.py __init__.py /app/agentpython/
+
+USER appuser
+EXPOSE 8088
+CMD ["python3", "-m", "agentpython.main"]
