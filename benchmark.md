@@ -267,7 +267,81 @@ Run: [out/bench/run-20260718-151536/summary.md](out/bench/run-20260718-151536/su
 - The long runs no longer show the previous AAD-token-expiry failure mode (`http_403` after token expiry). Remaining failures are isolated `http_500` responses from the hosted-agent path.
 - Token usage is `n/a` in these summaries because the current Responses wire envelope does not expose model `usage` back to the harness.
 
-## Anexo: Python free-threaded/no-GIL container
+## Appendix: Phase A with two client workers
+
+This appendix is a small concurrency probe for the production baseline images,
+not a replacement for the main sequential matrix. Both agents were redeployed
+with `BENCHMARK_MODE=phase-a`, so the run does not call the model. The command
+uses two client workers and no artificial pacing:
+
+```powershell
+azd env set BENCHMARK_MODE phase-a
+azd deploy ippoc-agentcsharp --no-prompt
+azd deploy ippoc-agentpython --no-prompt
+pwsh -NoProfile -File ./scripts/benchmark.ps1 -N 20 -Agent both -Parallel 2 -TargetRps 0 -Warmup 0 -MaxRetries 5 -RequestTimeoutSec 30
+```
+
+Run: [out/bench/run-20260722-235524/summary.md](out/bench/run-20260722-235524/summary.md)
+
+| setting | value |
+|---|---|
+| mode | Phase A, no model call |
+| n | 20 |
+| parallel | 2 |
+| target_rps | 0 |
+| warmup | 0 |
+| max_retries | 5 |
+| request_timeout_sec | 30 |
+
+| metric | csharp | python |
+|---|---:|---:|
+| n_total | 20 | 20 |
+| n_success | 20 | 20 |
+| n_failed | n/a | n/a |
+| success_rate_pct | 100 | 100 |
+| wallclock_s | 65.533 | 83.995 |
+| throughput_rps | 0.305 | 0.238 |
+| latency_ms_mean | 6522.03 | 8352.04 |
+| latency_ms_stddev | 445.86 | 805.27 |
+| latency_ms_min | 5813.41 | 7319.34 |
+| latency_ms_p50 | 6618.95 | 8232.15 |
+| latency_ms_p90 | 6935.72 | 9134.78 |
+| latency_ms_p95 | 7001.32 | 10253.49 |
+| latency_ms_p99 | 7420.72 | 10297.4 |
+| latency_ms_max | 7525.57 | 10308.38 |
+| response_bytes_mean | 882 | 890 |
+| top_errors | n/a | n/a |
+
+With two client workers and no model call, both stacks complete 20/20 requests.
+C# keeps the lower observed latency and higher throughput in this small run
+(~0.305 rps vs ~0.238 rps). The absolute latencies are higher than the main
+single-worker Phase A table because this probe intentionally overlaps requests;
+it mainly shows that the same relative ordering remains visible under light
+client concurrency.
+
+For the Python baseline specifically, the following table compares a 20-sample
+slice from the normal CPython 3.12 image with one client worker against the
+20-call two-worker run above. Both rows use the production baseline image with
+the regular GIL, not the no-GIL experiment.
+
+| Python baseline slice | run | samples | parallel | target_rps | success | mean_ms | p50_ms | p95_ms | p99_ms | max_ms |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPython 3.12, GIL, first 20 Phase A calls from `N=100` | [out/bench/run-20260718-145047/python.csv](out/bench/run-20260718-145047/python.csv) | 20 | 1 | 0.15 | 20/20 | 4590.73 | 4602.88 | 5009.00 | 5176.76 | 5218.70 |
+| CPython 3.12, GIL, Phase A two-worker probe | [out/bench/run-20260722-235524/python.csv](out/bench/run-20260722-235524/python.csv) | 20 | 2 | 0 | 20/20 | 8352.04 | 8232.15 | 10253.49 | 10297.40 | 10308.38 |
+
+The two-worker row is useful as a light concurrency probe, but not as a claim
+that Python became slower under the GIL. It changes the client-side shape of the
+test: requests overlap, there is no pacing, and the hosted-agent path has more
+in-flight work at once. The fair reading is narrower: under this two-worker
+probe the Python container remains reliable, but per-call latency rises because
+the bottleneck is the hosted-agent/proxy/opacity path rather than local Python
+CPU execution. This is also the expected behavior for both GIL and no-GIL
+runtimes: concurrency is not the same thing as making each individual request
+faster. It can improve aggregate throughput when there is spare capacity, but it
+can also increase per-request latency when the shared hosted path is already the
+dominant cost.
+
+## Appendix: Python free-threaded/no-GIL container
 
 This appendix is an experimental control run, not the production baseline. The
 Python agent was temporarily redeployed with a custom CPython free-threaded
@@ -280,6 +354,20 @@ build from [src/AgentPython/Dockerfile.nogil](src/AgentPython/Dockerfile.nogil):
 | Python build | CPython 3.14.0 configured with `--disable-gil` |
 | Base image | `debian:bookworm-slim` |
 | Deployment scope | temporary `ippoc-agentpython` redeploy only |
+
+This is intentionally not a headline benchmark. Free-threaded CPython is still
+much less representative of production Python deployments than regular CPython
+3.12 with the GIL. The dependency ecosystem is also less mature for this path:
+the attempted CPython 3.13 free-threaded image failed during build because CFFI
+does not support that free-threaded runtime. Using CPython 3.14 solved the build,
+but it also changed the interpreter version, base image, and wheel set, so it is
+not an apples-to-apples runtime comparison with the production Python 3.12 image.
+
+The workload itself is another reason not to over-read no-GIL results. Removing
+the GIL is most relevant for CPU-bound Python threads. This benchmark is dominated
+by hosted-agent/proxy/network latency and the deliberate opacity delay, with very
+little local Python CPU work. A no-GIL image can therefore be a useful objection
+handler, but it should remain a side control rather than the main story.
 
 CPython 3.13 free-threaded was also attempted first, but the dependency graph
 failed during image build because CFFI does not support the free-threaded build
@@ -307,8 +395,30 @@ stalled HTTP call. The production endpoint was restored afterwards to
 | 100 | `out/bench/nogil-phasea-n100-progress.log` | partial 30/100 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | stopped before summary; logged checkpoints through 30/100 were `ok` |
 | 1000 | not run to completion | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | skipped; at 0.15 rps this is roughly a 1h50m single-agent run per mode |
 
+As a sanity check against the regular Python baseline, there are two useful CSV
+slices:
+
+- Phase A no-GIL only has a complete `N=10` run here, so it is a smaller sample
+  than the 20-call GIL slices above.
+- Phase B no-GIL has a complete `N=100` run, so the first 20 rows can be compared
+  directly against the first 20 rows of the regular CPython 3.12/GIL Phase B
+  `N=100` run.
+
+| Python Phase A slice | run | samples | parallel | target_rps | success | mean_ms | p50_ms | p95_ms | p99_ms | max_ms |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPython 3.12, GIL, first 20 calls | [out/bench/run-20260718-145047/python.csv](out/bench/run-20260718-145047/python.csv) | 20 | 1 | 0.15 | 20/20 | 4590.73 | 4602.88 | 5009.00 | 5176.76 | 5218.70 |
+| CPython 3.14 free-threaded/no-GIL | [out/bench/run-20260722-200153/python.csv](out/bench/run-20260722-200153/python.csv) | 10 | 1 | 0.15 | 10/10 | 4731.54 | 4635.14 | 5356.38 | 5499.76 | 5535.60 |
+
+| Python Phase B first-20 slice | run | source run size | samples | parallel | target_rps | success | mean_ms | p50_ms | p95_ms | p99_ms | max_ms |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPython 3.12, GIL, first 20 calls from `N=100` | [out/bench/run-20260718-101150/python.csv](out/bench/run-20260718-101150/python.csv) | 100 | 20 | 1 | 0.15 | 20/20 | 4638.59 | 4578.49 | 4943.68 | 5316.54 | 5409.75 |
+| CPython 3.14 free-threaded/no-GIL, first 20 calls from `N=100` | [out/bench/run-20260722-182810/python.csv](out/bench/run-20260722-182810/python.csv) | 100 | 20 | 1 | 0.15 | 20/20 | 4805.19 | 4771.56 | 5410.28 | 5765.54 | 5854.35 |
+
 The closed no-GIL runs do not materially change the latency story for this
 hosted-agent workload: the observed means remain around 4.7s in both Phase A
 and Phase B. That is consistent with the benchmark being dominated by hosted
 agent/proxy/network latency and the deliberate opacity delay, not by Python CPU
-parallelism where removing the GIL would be expected to help.
+parallelism where removing the GIL would be expected to help. In that context,
+seeing similar or slightly higher per-call latency in the free-threaded run is
+not surprising: removing the GIL does not remove the hosted-agent round trip,
+and concurrent execution is not a guarantee of lower latency for each request.

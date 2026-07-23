@@ -275,6 +275,7 @@ function Invoke-Agent {
             $Endpoint   = $using:Endpoint
             $Body       = $using:Body
             $MaxRetries = $using:MaxRetries
+            $RequestTimeoutSec = $using:RequestTimeoutSec
             $paceMs     = $using:paceMs
             $idx        = $_ - 1
             if ($paceMs -gt 0) { Start-Sleep -Milliseconds ([int]($idx * $paceMs / $using:Parallel)) }
@@ -319,6 +320,7 @@ function Invoke-Agent {
                     $raw = Invoke-WebRequest -Uri $Endpoint -Method POST -Body $Body `
                         -ContentType 'application/json' `
                         -Headers @{ Authorization = "Bearer $token" } `
+                        -OperationTimeoutSeconds $RequestTimeoutSec `
                         -SkipHttpErrorCheck -ErrorAction Stop
                     $code = [int]$raw.StatusCode
                     $row.status_code = $code
@@ -415,12 +417,21 @@ function Get-Summary {
 
 function Write-SummaryMarkdown {
     param([object[]]$Summaries, [hashtable]$Meta, [string]$Path)
+    function Format-MarkdownValue {
+        param([object]$Value)
+        if ($null -eq $Value -or ($Value -is [string] -and $Value -eq '')) { return 'n/a' }
+        if ($Value -is [double] -or $Value -is [single] -or $Value -is [decimal]) {
+            return $Value.ToString('0.###', [System.Globalization.CultureInfo]::InvariantCulture)
+        }
+        return [string]$Value
+    }
+
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.AppendLine("# Benchmark run $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss K')")
     [void]$sb.AppendLine()
     [void]$sb.AppendLine("| setting | value |")
     [void]$sb.AppendLine("|---|---|")
-    foreach ($k in $Meta.Keys) { [void]$sb.AppendLine("| $k | $($Meta[$k]) |") }
+    foreach ($k in $Meta.Keys) { [void]$sb.AppendLine("| $k | $(Format-MarkdownValue $Meta[$k]) |") }
     [void]$sb.AppendLine()
     [void]$sb.AppendLine("| metric | " + (($Summaries | ForEach-Object agent) -join ' | ') + " |")
     [void]$sb.AppendLine("|" + ("---|" * ($Summaries.Count + 1)))
@@ -432,7 +443,7 @@ function Write-SummaryMarkdown {
         'response_bytes_mean','tokens_in_avg','tokens_out_avg','tokens_total_sum','top_errors'
     )
     foreach ($p in $props) {
-        $vals = $Summaries | ForEach-Object { $val = $_.$p; if ($null -eq $val -or $val -eq '') { 'n/a' } else { $val } }
+        $vals = $Summaries | ForEach-Object { Format-MarkdownValue $_.$p }
         [void]$sb.AppendLine("| $p | " + ($vals -join ' | ') + " |")
     }
     Set-Content -Path $Path -Value $sb.ToString() -Encoding utf8
